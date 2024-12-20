@@ -1,0 +1,532 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+#install.packages("tidyverse")
+library(tidyverse)
+file_path <- "/Users/federicofilippello/Projects/maestria/eea/eea final/pegaxy_2022_samp_original.csv"
+data <- read_csv(file_path)
+
+```
+```{r}
+summary(data)
+```
+Primero Hacemos una limpieza de outliers, solo los mas significativos en price para poder hacer un analisis, vamos a eliminar 62 outliers y vamos a trabajar, sacamos las variables que aportan muy poco 
+```{r}
+library(ggcorrplot)
+
+```
+Armo archivo TEST, aca realizo todo el mismo proceso para los datos de train, para que las validaciones sean acertadas.
+
+```{r}
+file_path <- "/Users/federicofilippello/Projects/maestria/eea/eea final/pegaxy_2022_test_original.csv"
+data_test <- read_csv(file_path)
+
+# Identificar y eliminar outliers en 'price' usando el criterio IQR
+q1 <- quantile(data_test$price, 0.25, na.rm = TRUE)
+q3 <- quantile(data_test$price, 0.75, na.rm = TRUE)
+iqr <- q3 - q1
+lower_bound <- q1 - 1.5 * iqr
+upper_bound <- q3 + 1.5 * iqr
+
+# Filtrar datos sin outliers
+data_clean_test <- data_test %>% 
+  filter(price >= lower_bound & price <= upper_bound)
+
+# Calcular y mostrar el número de outliers eliminados
+outliers_removed <- nrow(data_test) - nrow(data_clean_test)
+cat("Número de outliers eliminados: ", outliers_removed, "\n")
+
+data_clean_test <- subset(data_clean_test, select = -c(speed, strength, water, fire, wind,lighting))
+
+data_clean_test$winratio <- with(data_clean_test, ifelse(total_races > 0, win / total_races, NA))
+
+data_clean_test <- subset(data_clean_test, select = -c(win, lose, total_races))
+
+
+
+data_clean_test <- data_clean_test %>%
+  filter(minutesToSell >= 1 & minutesToSell <= 60)
+
+data_clean1 <- subset(data_clean_test, select = -c(tokenid,bornUsableBreed,bornUsableRace,canrace,energy,gender,priceFloor,date))
+
+data_clean_test <- data_clean_test %>%
+  mutate(bloodline_cluster = case_when(
+    bloodline %in% c("Klin", "Zan") ~ "Klin_Zan",
+    bloodline == "Hoz" ~ "Hoz",
+    bloodline == "Campona" ~ "Campona"
+  ))
+
+#data_clean2$bloodline_cluster <- factor(data_clean1$bloodline_cluster, levels = c("Hoz", "Klin_Zan"))
+
+data_clean_test <- subset(data_clean_test, select = -c(bloodline))
+
+
+
+```
+
+
+
+Primero voy a sacar los outliers mas significativos, son aproximadamente 60, sacando esto puedo empezar a ver graficos que antes se me salian demasiado de escala.
+
+```{r}
+# Identificar y eliminar outliers en 'price' usando el criterio IQR
+q1 <- quantile(data$price, 0.25, na.rm = TRUE)
+q3 <- quantile(data$price, 0.75, na.rm = TRUE)
+iqr <- q3 - q1
+lower_bound <- q1 - 1.5 * iqr
+upper_bound <- q3 + 1.5 * iqr
+
+# Filtrar datos sin outliers
+data_clean <- data %>% 
+  filter(price >= lower_bound & price <= upper_bound)
+
+# Calcular y mostrar el número de outliers eliminados
+outliers_removed <- nrow(data) - nrow(data_clean)
+cat("Número de outliers eliminados: ", outliers_removed, "\n")
+
+# Exploración descriptiva de la variable 'price' (sin outliers)
+# Ver distribución de los precios con un histograma
+hist(data_clean$price, 
+     main = "Distribución de Precios (Sin Outliers)", 
+     xlab = "Price", 
+     col = "blue", 
+     breaks = 30)
+
+# Estadísticas descriptivas de 'price'
+descriptive_stats <- data_clean %>% 
+  summarize(
+    mean_price = mean(price, na.rm = TRUE),
+    median_price = median(price, na.rm = TRUE),
+    sd_price = sd(price, na.rm = TRUE),
+    min_price = min(price, na.rm = TRUE),
+    max_price = max(price, na.rm = TRUE),
+    n_missing = sum(is.na(price))
+  )
+
+descriptive_stats
+
+# Boxplot para detectar valores atípicos en 'price' (sin extremos)
+boxplot(data_clean$price, 
+        main = "Boxplot de Precios (Sin Outliers)", 
+        ylab = "Price", 
+        col = "orange")
+library(dplyr)
+
+# Correlación entre 'price' y otras variables numéricas
+#numeric_vars <- data_clean %>% select(where(is.numeric))
+numeric_vars <- data_clean[sapply(data_clean, is.numeric)]
+
+cor_matrix <- cor(numeric_vars, use = "complete.obs")
+cor_matrix["price", ] # Correlación con 'price'
+
+ggcorrplot(cor_matrix, 
+           lab = TRUE, 
+           title = "Matriz de Correlación", 
+           lab_size = 2, 
+           ggtheme = theme_minimal(), 
+           tl.cex = 4)
+
+
+# Guardar el análisis de correlación
+write.csv(cor_matrix, "correlation_matrix.csv")
+
+# Visualizar tendencias de 'price' según variables categóricas clave
+data_clean %>% 
+  ggplot(aes(x = gender, y = price, fill = gender)) + 
+  geom_boxplot() + 
+  theme_minimal() + 
+  labs(title = "Distribución de Precios por Género (Sin Outliers)", x = "Género", y = "Precio")
+
+data_clean %>% 
+  ggplot(aes(x = bloodline, y = price, fill = bloodline)) + 
+  geom_boxplot() + 
+  theme_minimal() + 
+  labs(title = "Distribución de Precios por Línea de Sangre (Sin Outliers)", x = "Línea de Sangre", y = "Precio")
+
+data_clean %>% 
+  ggplot(aes(x = breedtype, y = price, fill = breedtype)) + 
+  geom_boxplot() + 
+  theme_minimal() + 
+  labs(title = "Distribución de Precios por Línea de Sangre (Sin Outliers)", x = "Línea de Sangre", y = "Precio")
+##########
+
+
+
+
+```
+
+
+aca borramos las variables que tienen una correlacion muy baja con la variable dependiente price
+
+```{r}
+# Usando subset
+data_clean <- subset(data_clean, select = -c(speed, strength, water, fire, wind,lighting))
+```
+
+Tembien vemos una correlacion ata entre las variables win,lose y total_races y borramos las variables previas para evitar
+```{r}
+
+# Calcula la relación de victorias (winratio) como la división entre el número de victorias (win) y el total de carreras (total_races).
+# Si total_races es 0, asigna NA para evitar divisiones por cero.
+data_clean$winratio <- with(data_clean, ifelse(total_races > 0, win / total_races, NA))
+
+# Elimina las columnas 'win', 'lose' y 'total_races' del dataframe 'data_clean'.
+data_clean <- subset(data_clean, select = -c(win, lose, total_races))
+
+
+```
+
+```{r}
+
+data_clean
+
+```
+
+
+
+
+
+
+
+
+```{r}
+# Correlación entre 'price' y otras variables numéricas
+numeric_vars <- data_clean %>% select(where(is.numeric))
+cor_matrix <- cor(numeric_vars, use = "complete.obs")
+cor_matrix["price", ] # Correlación con 'price'
+
+ggcorrplot(cor_matrix, 
+           lab = TRUE, 
+           title = "Matriz de Correlación", 
+           lab_size = 3, 
+           ggtheme = theme_minimal(), 
+           tl.cex = 5)
+```
+```{r}
+write.csv(data_clean, "data_clean.csv", row.names = FALSE)
+
+```
+
+
+
+
+CRITERIOS DE EXCLUCION
+luego de analizar los graficos de criterios de exclusion vamos a pasarlos a filtrar el dataset para quedarnos con los valores entre 1 minuto y 1 hora que consideramos son los que tienen el verdadero precio de mercado que los usuarios pagarian
+
+
+```{r}
+# Filtrar los datos donde minutesToSell esté entre 1 y 60
+data_clean <- data_clean %>%
+  filter(minutesToSell >= 1 & minutesToSell <= 60)
+
+# Mostrar las primeras filas del nuevo dataset
+head(data_clean)
+
+```
+
+
+
+
+
+ahora vamos a ver una regrecion de todas las variables contra la variable dependiente para analizar la importancia, hacemos la regrecion en pool y vamos a ir haciendo un drop de los valores p cuando las variables sean pvalor sea mayor a 0.05
+
+```{r}
+#corremos modelo regrecion clasica
+modelo_inicial <- lm(price ~ ., data = data_clean)
+
+```
+
+
+vamos a analizar el modelo para detectar significacion de los coeficientes
+
+```{r}
+summary(modelo_inicial)
+
+```
+
+con estos resultados vamos a borrar los que tengan un p-vlaor mayor a 0,05 y volver a correr la regrecion con los nuevos valores
+```{r}
+#quitamos variables
+data_clean1 <- subset(data_clean, select = -c(tokenid,bornUsableBreed,bornUsableRace,canrace,energy,gender,priceFloor,date))
+
+```
+
+```{r}
+#corremos modelo
+modelo_inicial1 <- lm(price ~ ., data = data_clean1)
+
+```
+
+```{r}
+summary(modelo_inicial1)
+
+```
+voy a armar un cluster con los bloodline y ver que pasa
+
+
+
+
+```{r}
+
+# Crea una nueva columna 'bloodline_cluster' basada en los valores de la columna 'bloodline'.
+# Agrupa las líneas de sangre 'Klin' y 'Zan' bajo el valor 'Klin_Zan'.
+# Asigna directamente los valores 'Hoz' y 'Campona' a sus respectivos grupos.
+data_clean2 <- data_clean1 %>%
+  mutate(bloodline_cluster = case_when(
+    bloodline %in% c("Klin", "Zan") ~ "Klin_Zan",
+    bloodline == "Hoz" ~ "Hoz",
+    bloodline == "Campona" ~ "Campona"
+  ))
+
+# Elimina la columna original 'bloodline' del dataframe 'data_clean2'.
+data_clean2 <- subset(data_clean2, select = -c(bloodline))
+
+```
+```{r}
+#corremos modelo clasico
+modelo_inicial2 <- lm(price ~ ., data = data_clean2)
+summary(modelo_inicial2)
+
+```
+
+
+
+```{r}
+# Instalar el paquete si no lo tienes
+install.packages("nortest")
+library(nortest)
+```
+
+```{r}
+# Prueba de Anderson-Darling
+ad.test(data_clean2$price)
+```
+```{r}
+# Realiza la prueba de Kolmogorov-Smirnov (KS) para comparar la distribución de la columna 'price' con una distribución normal.
+# Usa la media y la desviación estándar de 'price' como parámetros de la distribución normal de referencia.
+ks.test(data_clean2$price, "pnorm", mean(data_clean2$price), sd(data_clean2$price))
+
+```
+
+
+```{r}
+write.csv(data_clean2, "data_clean2.csv", row.names = FALSE)
+
+```
+
+
+```{r}
+# Instalar paquetes necesarios
+install.packages("MASS")         # Para la función rlm()
+install.packages("robustbase")   # Métodos avanzados para regresión robusta
+install.packages("car")          # Diagnósticos y gráficos
+
+# Cargar librerías
+library(MASS)
+library(robustbase)
+library(car)
+```
+
+vamos a usar Mass M-stimadores porque...
+
+```{r}
+data_clean2 <- subset(data_clean2, select = -c(date))
+
+# Modelo robusto con M-estimadores
+modelo_robusto <- rlm(price ~ ., data = data_clean2)
+
+# Ver resultados
+summary(modelo_robusto)
+```
+
+
+```{r}
+# Genera un gráfico de dispersión de los valores ajustados del modelo robusto ('fitted(modelo_robusto)') 
+# frente a los residuos del modelo ('residuals(modelo_robusto)').
+# Se configuran etiquetas para los ejes (xlab e ylab) y un título para el gráfico (main).
+plot(fitted(modelo_robusto), residuals(modelo_robusto),
+     xlab = "Valores Ajustados", ylab = "Residuos",
+     main = "Residuos vs Valores Ajustados")
+
+# Dibuja una línea horizontal en el nivel 0 para ayudar a visualizar la dispersión de los residuos alrededor de cero.
+abline(h = 0, col = "red")
+
+
+```
+
+
+
+
+```{r}
+# Genera un histograma de los residuos del modelo robusto ('residuals(modelo_robusto)').
+# Utiliza 30 intervalos ('breaks = 30') para dividir los datos.
+# Establece un título para el gráfico ('main') y una etiqueta para el eje x ('xlab').
+hist(residuals(modelo_robusto), breaks = 30, 
+     main = "Distribución de Residuos", xlab = "Residuos")
+
+```
+
+
+```{r}
+
+
+#estas itraciones solo las realice para ver algunas fallas en las regreciones se podria pasar por alto el codigo
+
+
+#install.packages("fastDummies")
+library(fastDummies)
+
+
+data_clean3 <- data_clean2 %>%
+  mutate(across(where(is.character), as.factor))
+# Crear variables dummy
+data_clean3 <- fastDummies::dummy_cols(data_clean3, remove_first_dummy = TRUE, remove_selected_columns = TRUE)
+
+data_clean3 <- data_clean3 %>%
+  mutate(across(where(is.factor), ~ as.numeric(as.factor(.))))
+data_clean3 <- data_clean3 %>%
+  mutate(across(where(is.logical), as.numeric))
+
+
+# Revisar si hay valores NA
+sum(is.na(data_clean3))
+
+# Eliminar filas con valores NA
+data_clean3 <- na.omit(data_clean3)
+
+# Verificar si hay valores infinitos
+sum(!is.finite(data_clean3$price))
+
+
+#sapply(data_clean3, class)
+
+# Reemplazar o eliminar valores infinitos si existen
+data_clean3 <- data_clean3[is.finite(rowSums(data_clean3)), ]
+
+# Convertir todas las columnas que sean de tipo "integer" a "numeric"
+data_clean3 <- data_clean3 %>%
+  mutate(across(where(is.integer), as.numeric))
+
+# Verificar las clases nuevamente
+sapply(data_clean3, class)
+
+
+```
+
+
+
+```{r}
+#corro modelo robusto
+modelo_ols <- lm(price ~ ., data = data_clean2)
+
+# Comparar coeficientes
+summary(modelo_ols)
+summary(modelo_robusto)
+
+```
+
+
+aca emoezamos a trabajar con tesst
+aca elimino las columnas con NA y hago mi prediccion con mi modelo robusto y el dataset de test que contiene 700 observaciones
+
+```{r}
+# Generar predicciones en el conjunto de prueba
+
+# Revisar si hay valores NA
+sum(is.na(data_clean_test))
+
+# Eliminar filas con valores NA
+data_clean_test <- na.omit(data_clean_test)
+predicciones <- predict(modelo_robusto, newdata = data_clean_test)
+
+```
+
+ahora  quieroevaluar el rendimiento de un modelo robusto (rlm) en un conjunto de datos de prueba vamos a usar 3 metricas distintas
+
+calculo Error cuadrático medio (MSE)
+
+
+```{r}
+# Calcula el error cuadrático medio (MSE) entre los valores reales de 'price' en el conjunto de prueba ('data_clean_test$price') 
+# y las predicciones generadas ('predicciones'). 
+mse <- mean((data_clean_test$price - predicciones)^2)
+
+# Imprime el valor del MSE con un mensaje descriptivo.
+print(paste("MSE:", mse))
+
+```
+
+calculo Error absoluto medio (MAE):
+
+
+```{r}
+# Calcula el error absoluto medio (MAE) entre los valores reales de 'price' en el conjunto de prueba ('data_clean_test$price') 
+# y las predicciones generadas ('predicciones').
+mae <- mean(abs(data_clean_test$price - predicciones))
+
+# Imprime el valor del MAE con un mensaje descriptivo.
+print(paste("MAE:", mae))
+
+
+```
+
+
+calculo
+R² (Coeficiente de determinación):
+
+```{r}
+# Calcula la suma de cuadrados total (SST), que mide la variación total en los valores reales de 'price' 
+# respecto a su media en el conjunto de prueba ('data_clean_test$price').
+sst <- sum((data_clean_test$price - mean(data_clean_test$price))^2)  # Suma de cuadrados total
+
+# Calcula la suma de cuadrados del error (SSE), que mide la variación entre los valores reales de 'price'
+# y las predicciones generadas ('predicciones').
+sse <- sum((data_clean_test$price - predicciones)^2)          # Suma de cuadrados del error
+
+# Calcula el coeficiente de determinación (R²), que representa la proporción de la variación total explicada por el modelo.
+r_squared <- 1 - (sse / sst)
+
+# Imprime el valor del R² con un mensaje descriptivo.
+print(paste("R²:", r_squared))
+
+
+```
+
+calculo los rangos de price para el comparar con el MSE
+
+```{r}
+# Calcula el valor mínimo de la columna 'price' en el dataframe 'data_clean3', ignorando valores NA.
+min_price <- min(data_clean3$price, na.rm = TRUE)
+
+# Calcula el valor máximo de la columna 'price' en el dataframe 'data_clean3', ignorando valores NA.
+max_price <- max(data_clean3$price, na.rm = TRUE)
+
+# Calcula el rango de precios como la diferencia entre el valor máximo y el valor mínimo.
+range_price <- max_price - min_price
+
+# Imprime los valores mínimo, máximo y el rango de precios como un vector.
+print(c(min_price, max_price, range_price))
+
+
+```
+
+
+
+
+Ahora predecimos con el modelo lineal clasico
+
+```{r}
+predicciones <- predict(modelo_ols, newdata = data_clean_test)
+mse <- mean((data_clean_test$price - predicciones)^2)
+print(paste("MSE:", mse))
+mae <- mean(abs(data_clean_test$price - predicciones))
+print(paste("MAE:", mae))
+sst <- sum((data_clean_test$price - mean(data_clean_test$price))^2)  # Suma de cuadrados total
+sse <- sum((data_clean_test$price - predicciones)^2)          # Suma de cuadrados del error
+r_squared <- 1 - (sse / sst)
+print(paste("R²:", r_squared))
+```
+
